@@ -24,19 +24,7 @@ https://github.com/pramsey/kmeans.git
 EXECUÇÃO DO CÓDIGO:
 ---------------------
 
-Para compilar:
+Intruções para compilar:
 ```
-make 
-```
-
-Para executar a versão openMP (Em que k deve ser o número de clusters, para nossos testes utilizamos k = 500): 
-
-```
-./spotify_kmeans_openmp datasetFilt.csv k resultados_spotify.txt NUM_THREADS 
-```
-
-Para executar a versão híbrida (Em que k deve ser o número de clusters, para nossos testes utilizamos k = 500): 
-
-```
-mpirun -np NUM_PROCESSOS ./spotify_kmeans_mpi datasetFilt.csv k resultados_spotify.txt NUM_THREADS 
+make help
 ```
