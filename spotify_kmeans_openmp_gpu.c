@@ -1,6 +1,4 @@
-/*-------------------------------------------------------------------------
- * spotify_kmeans.c - K-Means GPU Version (OpenMP Offload)
- *-------------------------------------------------------------------------*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,10 +36,7 @@ static void pt_centroid(const Pointer *objs, const int *clusters,
     point *center = (point *)centroid;
 
     #ifdef _OPENMP
-    /* FIX: 
-     * 1. Use map(to: ...) instead of is_device_ptr.
-     * 2. Wrap in block { } to separate target data env from teams execution.
-     */
+
     #pragma omp target map(tofrom: sumx, sumy, num_cluster) \
                        map(to: objs[0:num_objs], clusters[0:num_objs])
     {
@@ -126,7 +121,7 @@ int main(int argc, char **argv) {
     config.clusters = calloc(num_objs, sizeof(int));
 
     char line[256];
-    if (fgets(line, sizeof(line), f)) {} // Consume header
+    if (fgets(line, sizeof(line), f)) {} 
     for (int i = 0; i < num_objs && fgets(line, sizeof(line), f); i++) {
         if (sscanf(line, "%lf,%lf", &pts[i].x, &pts[i].y) == 2) {
             config.objs[i] = &pts[i];
@@ -148,7 +143,7 @@ int main(int argc, char **argv) {
     time_t start = time(NULL);
     
     int *d_clusters = config.clusters;
-    (void)d_clusters; /* FIX: Silence unused variable warning */
+    (void)d_clusters; 
     
     #pragma omp target data map(to: pts[0:num_objs]) \
                           map(tofrom: d_clusters[0:num_objs])

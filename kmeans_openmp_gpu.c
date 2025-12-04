@@ -13,10 +13,7 @@
 #endif
 #include "kmeans.h"
 
-/*
- * FUNÇÃO: update_r
- * PARALELIZAÇÃO: OpenMP GPU Offload
- */
+
 static void update_r(kmeans_config *config) {
     int i;
     
@@ -31,11 +28,7 @@ static void update_r(kmeans_config *config) {
     Pointer obj;
 
     #ifdef _OPENMP
-    /* FIX: 
-     * 1. Replaced 'is_device_ptr' with 'map'. Since data is managed by OpenMP, 
-     * we map it (OpenMP handles address translation).
-     * 2. Added explicit block { } to separate target from teams.
-     */
+
     #pragma omp target map(to: objs[0:num_objs], centers[0:k]) \
                        map(tofrom: clusters[0:num_objs])
     {
@@ -44,10 +37,7 @@ static void update_r(kmeans_config *config) {
         for (i = 0; i < num_objs; i++) {
             
             obj = objs[i];
-            /* Note: obj here is a pointer. If it points to Host memory 
-             * and Unified Shared Memory is not active, this dereference 
-             * might fail on GPU. Assuming flat data or USM. */
-            
+
             if (!obj) {
                 clusters[i] = KMEANS_NULL_CLUSTER;
                 continue;
@@ -68,7 +58,6 @@ static void update_r(kmeans_config *config) {
         }
     }
     #else
-    /* Sequential fallback if OpenMP is disabled */
     for (i = 0; i < num_objs; i++) {
         obj = objs[i];
         if (!obj) {
@@ -129,7 +118,6 @@ kmeans_result kmeans(kmeans_config *config) {
         int *current_clusters = config->clusters;
         int n_objs = config->num_objs;
         
-        /* Suppress unused variable warning */
         (void)current_clusters;
 
         #ifdef _OPENMP

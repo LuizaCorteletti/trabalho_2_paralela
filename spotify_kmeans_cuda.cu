@@ -1,8 +1,3 @@
-// spotify_kmeans_cuda.cu
-// Compile: nvcc -O3 spotify_kmeans_cuda.cu -o spotify_kmeans_cuda
-// Run (defaults): ./spotify_kmeans_cuda input.csv <k> out.tsv
-// Run (custom):   ./spotify_kmeans_cuda input.csv <k> out.tsv <threads> <blocks>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +20,7 @@ typedef struct {
     }                                                             \
 } while (0)
 
-// Count lines (data lines excluding header)
+//
 static int count_lines(FILE *f) {
     int count = 0;
     char buf[4096];
@@ -34,7 +29,7 @@ static int count_lines(FILE *f) {
     return (count > 0) ? count - 1 : 0;
 }
 
-// Kernel #1: assign each point to nearest centroid
+
 __global__ void assign_clusters_kernel(const Point *pts, const Point *centers, int *clusters, int num_objs, int k) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = gridDim.x * blockDim.x;
@@ -52,22 +47,22 @@ __global__ void assign_clusters_kernel(const Point *pts, const Point *centers, i
     }
 }
 
-// Kernel #2: compute per-block partial sum & count for a single cluster.
-// Shared memory layout: [blockDim.x doubles sumx][blockDim.x doubles sumy][blockDim.x ints count]
-// Since extern shared is double[], we reinterpret the tail as ints.
+
+
+
 __global__ void reduce_cluster_kernel(const Point *pts, const int *clusters,
                                       Point *block_sums, int *block_counts,
                                       int num_objs, int k, int cluster_id) {
-    extern __shared__ double sarr[]; // size must be: 2*blockDim.x*sizeof(double) + blockDim.x*sizeof(int)
-    double *s_sumx = sarr;                       // blockDim.x doubles
-    double *s_sumy = sarr + blockDim.x;          // blockDim.x doubles
-    int *s_count = (int*)(sarr + 2*blockDim.x);  // blockDim.x ints (reinterpreted)
+    extern __shared__ double sarr[]; 
+    double *s_sumx = sarr;                       
+    double *s_sumy = sarr + blockDim.x;          
+    int *s_count = (int*)(sarr + 2*blockDim.x);  
 
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     int bidx = bid * blockDim.x + tid;
 
-    // Local accumulation
+    //
     double loc_sumx = 0.0;
     double loc_sumy = 0.0;
     int loc_count = 0;
@@ -81,13 +76,13 @@ __global__ void reduce_cluster_kernel(const Point *pts, const int *clusters,
         }
     }
 
-    // Write to shared
+    
     s_sumx[tid] = loc_sumx;
     s_sumy[tid] = loc_sumy;
     s_count[tid] = loc_count;
     __syncthreads();
 
-    // Reduction in shared memory (power-of-two-friendly)
+    
     for (int s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
             s_sumx[tid] += s_sumx[tid + s];
@@ -106,7 +101,7 @@ __global__ void reduce_cluster_kernel(const Point *pts, const int *clusters,
 }
 
 int main(int argc, char **argv) {
-    // Accept either 4 args (defaults threads/blocks) or 6 args
+    
     if (argc != 4 && argc != 6) {
         fprintf(stderr, "Uso: %s <csv> <k> <saida> [threadsPorBloco blocksPorGrid]\n", argv[0]);
         return 1;
@@ -116,9 +111,9 @@ int main(int argc, char **argv) {
     int k = atoi(argv[2]);
     const char *out_filename = argv[3];
 
-    // Defaults (overriden if argc == 6)
+    
     int threads = 256;
-    int blocks = 0; // compute after reading num_objs
+    int blocks = 0; 
 
     if (argc == 6) {
         threads = atoi(argv[4]);
@@ -141,7 +136,7 @@ int main(int argc, char **argv) {
     if (!pts_h || !centers_h || !clusters_h) { fprintf(stderr, "Memória insuficiente (host)\n"); return 1; }
 
     char line[4096];
-    if (fgets(line, sizeof(line), f)) {} // skip header
+    if (fgets(line, sizeof(line), f)) {} 
     int read = 0;
     while (read < num_objs && fgets(line, sizeof(line), f)) {
         double a,b;
@@ -157,24 +152,24 @@ int main(int argc, char **argv) {
 
     printf("Lidas %d músicas.\n", num_objs);
 
-    // If blocks not provided, compute a reasonable default
+    
     if (blocks == 0) {
         blocks = (num_objs + threads - 1) / threads;
         if (blocks < 1) blocks = 1;
     }
 
-    // Query device limits and validate parameters
+    
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     int maxThreads = prop.maxThreadsPerBlock;
-    size_t sharedMb = prop.sharedMemPerBlock; // bytes
+    size_t sharedMb = prop.sharedMemPerBlock; 
 
     if (threads > maxThreads) {
         fprintf(stderr, "Threads por bloco (%d) excede maxThreadsPerBlock (%d)\n", threads, maxThreads);
         return 1;
     }
 
-    // Compute shared memory required for reduction kernel
+    
     size_t shmem_per_block = (size_t)(2 * threads * sizeof(double)) + (size_t)(threads * sizeof(int));
     if (shmem_per_block > sharedMb) {
         fprintf(stderr, "Shared memory por bloco requerida (%zu bytes) excede limite da GPU (%zu bytes).\n",
@@ -183,18 +178,18 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Simple check for allocation size of block partial arrays
+    
     size_t blocks_k = (size_t)blocks * (size_t)k;
     if (blocks_k == 0) { fprintf(stderr, "blocks * k overflow / inválido\n"); return 1; }
 
-    // Initialize centroids (deterministic seed)
+    
     srand(42);
     for (int i = 0; i < k; ++i) {
         int r = rand() % num_objs;
         centers_h[i] = pts_h[r];
     }
 
-    // Device allocations
+    
     Point *pts_d = NULL;
     Point *centers_d = NULL;
     int *clusters_d = NULL;
@@ -206,25 +201,25 @@ int main(int argc, char **argv) {
     CUDA_CHECK(cudaMemcpy(pts_d, pts_h, sizeof(Point) * (size_t)num_objs, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(centers_d, centers_h, sizeof(Point) * (size_t)k, cudaMemcpyHostToDevice));
 
-    // Allocate storage for per-block partial sums for all clusters: blocks * k entries
+    
     Point *block_sums_d = NULL;
     int *block_counts_d = NULL;
     CUDA_CHECK(cudaMalloc((void**)&block_sums_d, sizeof(Point) * blocks_k));
     CUDA_CHECK(cudaMalloc((void**)&block_counts_d, sizeof(int) * blocks_k));
 
-    // Host-side buffers for partials
+    
     Point *block_sums_h = (Point*)malloc(sizeof(Point) * (size_t)blocks_k);
     int *block_counts_h = (int*)malloc(sizeof(int) * (size_t)blocks_k);
     if (!block_sums_h || !block_counts_h) { fprintf(stderr, "Memória insuficiente (host partials)\n"); return 1; }
 
-    Point *sums_h = (Point*)malloc(sizeof(Point) * (size_t)k); // final sums per cluster
-    int *counts_h = (int*)malloc(sizeof(int) * (size_t)k);     // final counts per cluster
+    Point *sums_h = (Point*)malloc(sizeof(Point) * (size_t)k); 
+    int *counts_h = (int*)malloc(sizeof(int) * (size_t)k);     
     if (!sums_h || !counts_h) { fprintf(stderr, "Memória insuficiente (host sums)\n"); return 1; }
 
     const int max_iter = 200;
     const double eps = 1e-6;
 
-    // Prepare CUDA timing
+    
     cudaEvent_t ev_start, ev_stop;
     CUDA_CHECK(cudaEventCreate(&ev_start));
     CUDA_CHECK(cudaEventCreate(&ev_stop));
@@ -233,13 +228,10 @@ int main(int argc, char **argv) {
 
     int iter;
     for (iter = 0; iter < max_iter; ++iter) {
-        // 1) Assign clusters on GPU
         assign_clusters_kernel<<<(unsigned int)blocks, (unsigned int)threads>>>(pts_d, centers_d, clusters_d, num_objs, k);
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        // 2) For each cluster, run reduction kernel to compute per-block partials
-        // Shared memory per block already validated
         for (int c = 0; c < k; ++c) {
             reduce_cluster_kernel<<<(unsigned int)blocks, (unsigned int)threads, shmem_per_block>>>(
                 pts_d, clusters_d, block_sums_d, block_counts_d, num_objs, k, c
@@ -248,11 +240,9 @@ int main(int argc, char **argv) {
         }
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        // 3) Copy block partials to host
         CUDA_CHECK(cudaMemcpy(block_sums_h, block_sums_d, sizeof(Point) * blocks_k, cudaMemcpyDeviceToHost));
         CUDA_CHECK(cudaMemcpy(block_counts_h, block_counts_d, sizeof(int) * blocks_k, cudaMemcpyDeviceToHost));
 
-        // 4) Aggregate on host to compute new centroids
         for (int c = 0; c < k; ++c) {
             sums_h[c].x = 0.0;
             sums_h[c].y = 0.0;
@@ -276,7 +266,7 @@ int main(int argc, char **argv) {
                 centers_h[c].x = sums_h[c].x / counts_h[c];
                 centers_h[c].y = sums_h[c].y / counts_h[c];
             } else {
-                // Reinitialize empty cluster to a random point (simple fallback)
+            
                 int r = rand() % num_objs;
                 centers_h[c] = pts_h[r];
             }
@@ -286,7 +276,7 @@ int main(int argc, char **argv) {
             if (shift > max_shift) max_shift = shift;
         }
 
-        // 5) Copy updated centers to device
+    
         CUDA_CHECK(cudaMemcpy(centers_d, centers_h, sizeof(Point) * (size_t)k, cudaMemcpyHostToDevice));
 
         if (max_shift < eps) {
@@ -301,12 +291,12 @@ int main(int argc, char **argv) {
     float elapsed_ms = 0.0f;
     CUDA_CHECK(cudaEventElapsedTime(&elapsed_ms, ev_start, ev_stop));
 
-    // Copy final clusters back to host
+
     CUDA_CHECK(cudaMemcpy(clusters_h, clusters_d, sizeof(int) * (size_t)num_objs, cudaMemcpyDeviceToHost));
 
     printf("\nK-Means concluído (%d iterações, tempo: %.3f ms)\n", iter, elapsed_ms);
 
-    // Write results to output
+
     FILE *out = fopen(out_filename, "w");
     if (out) {
         fprintf(out, "danceability\tenergy\tcluster\n");
@@ -319,7 +309,6 @@ int main(int argc, char **argv) {
         perror("Erro ao abrir arquivo de saída");
     }
 
-    // Cleanup
     free(pts_h);
     free(centers_h);
     free(clusters_h);
